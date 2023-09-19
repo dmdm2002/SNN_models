@@ -4,6 +4,7 @@ import glob
 import numpy as np
 import PIL.Image as Image
 from torch.utils.data import Dataset
+from SpikingUNet.Dataset.OneHot import label_to_one_hot_label
 
 
 class DaconSamsung(Dataset):
@@ -14,10 +15,10 @@ class DaconSamsung(Dataset):
         self.infer = infer
 
         if infer:
-            self.images = glob.glob(f'{root}/{run_type}/images/*.png')
+            self.images = glob.glob(f'{root}/{run_type}/test_image/*.png')
         else:
-            self.images = glob.glob(f'{root}/{run_type}/images/*.png')
-            self.masks = glob.glob(f'{root}/{run_type}/label/*.png')
+            self.images = glob.glob(f'{root}/{run_type}/{run_type}_source_image/*.png')
+            self.masks = glob.glob(f'{root}/{run_type}/{run_type}_source_gt/*.png')
 
     def __len__(self):
         return len(self.images)

@@ -18,8 +18,8 @@ class Displayer:
         for i in range(len(class_iou)):
             self.scores[self.record[i]] += class_iou[i]
 
-        self.scores[self.record.idex('miou')] += class_iou.mean()
-        self.scores[self.record.idex('loss')] += loss.item()
+        self.scores[self.record.index('miou')] += class_iou.mean()
+        self.scores[self.record.index('loss')] += loss.item()
         self.count += 1
 
     def average_score(self, epoch, disp=False, logging=False, db_runner=None, run_type='train'):

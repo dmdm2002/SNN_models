@@ -10,13 +10,13 @@ def get_iou(pred, gt, classes_name, display=False):
     pred = torch.argmax(pred, dim=1).view(-1)
     gt = gt.view(-1)
 
-    class_iou = np.zeros(classes_name)
-    class_weight = np.zeros(classes_name)
-    pixel_acc = np.float32(np.sum(pred == gt)) / gt.size
+    class_iou = np.zeros(len(classes_name))
+    class_weight = np.zeros(len(classes_name))
+    # pixel_acc = np.float32(np.sum(pred.numpy() == gt.numpy)) / gt.size
 
-    for i in range(classes_name):
-        intersection = np.float32(np.sum((pred == gt) * (gt == i)))
-        union = np.sum(gt == i) + np.sum(pred == i) - intersection
+    for i in classes_name:
+        intersection = np.float32(np.sum((pred.numpy() == gt.numpy()) * (gt.numpy() == i)))
+        union = np.sum(gt.numpy() == i) + np.sum(pred.numpy() == i) - intersection
         if union > 0:
             class_iou[i] = intersection / union
             class_weight[i] = union
@@ -25,6 +25,6 @@ def get_iou(pred, gt, classes_name, display=False):
         for i in range(len(classes_name)):
             print(f'{classes_name[i]} IoU: {class_iou[i]}')
         print(f'Mean Classes IOU: {np.mean(class_iou)}')
-        print(f'Pixel Accuracy: {pixel_acc}')
+        # print(f'Pixel Accuracy: {pixel_acc}')
 
     return class_iou, class_weight

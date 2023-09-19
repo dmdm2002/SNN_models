@@ -10,11 +10,12 @@ class Param:
         self.beta2 = 0.999
         self.batch_size = 2
 
-        self.classes = [1, 2, 3, 4, 5]
+        self.classes = [i for i in range(13)]
 
         self.device = 'cuda:0'
         self.log = True
-        self.project = 'SpikingUNet'
+        self.project = 'DaconDomainAdaptive'
+        self.log_name = 'SpikingUNet'
 
-        self.root = ''
+        self.root = 'D:/Side/Dacon/DomainAdaptive/dataset'
         self.run_type = ['train', 'val', 'test']

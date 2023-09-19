@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 import snntorch.functional as SF
 import wandb
@@ -11,7 +12,7 @@ from SpikingUNet.Model.SnnUNet import SpikingUNet
 from SpikingUNet.Utils.Options import Param
 from SpikingUNet.Utils.Display import Displayer
 from SpikingUNet.Dataset.DaconSamsung import DaconSamsung
-
+from SpikingUNet.Dataset.OneHot import label_to_one_hot_label
 
 class Trainer(Param):
     def __init__(self):
@@ -24,13 +25,15 @@ class Trainer(Param):
         self.te_disp = Displayer(record=self.record_names)
 
     def run(self):
-        model = SpikingUNet(3, len(self.classes))
+        model = SpikingUNet(3, len(self.classes)).to(self.device)
         optimizer = torch.optim.RMSprop(model.parameters(), lr=self.lr)
-        loss_fn = SF.ce_temporal_loss()
+        # loss_fn = SF.ce_rate_loss()
+        loss_fn = torch.nn.CrossEntropyLoss()
 
         if self.log:
-            db_runner = wandb.init(project=self.project)
-            wandb.config.update(Param.__dict__)
+            db_runner = wandb.init(project=self.project, name=self.log_name)
+            p = Param()
+            wandb.config.update(p.__dict__)
         else:
             db_runner = None
 
@@ -48,9 +51,9 @@ class Trainer(Param):
         val_loader = DataLoader(dataset=val_dataset, batch_size=2, shuffle=False)
 
         for ep in range(self.epoch):
-            for idx, (item, gt) in enumerate(tqdm(train_loader, desc=f'[Train Epoch: {self.epoch}/{ep}]')):
-                item = item.to(self.device)
-                gt = item.to(self.device)
+            for idx, (item, gt) in enumerate(tqdm(train_loader, desc=f'[Train Epoch: {ep}/{self.epoch}]')):
+                item = item.float().to(self.device)
+                gt = gt.long().to(self.device)
 
                 model.train()
                 logit = model(item)
@@ -60,29 +63,26 @@ class Trainer(Param):
                 loss.backward()
                 optimizer.step()
 
-                pred = logit.cpu().numpy()
-                gt = gt.cpu().numpy()
+                self.tr_disp.update(logit.detach().cpu(), gt.detach().cpu(), self.classes, loss)
 
-                self.tr_disp.update(pred, gt, self.classes, loss)
+            if self.log:
+                self.tr_disp.average_score(ep, True, True, db_runner, 'train')
+            else:
+                self.tr_disp.average_score(ep, True, True, run_type='train')
 
             model.eval()
             with torch.no_grad():
-                for idx, (item, gt) in enumerate(tqdm(val_loader, desc=f'[Test Epoch: {self.epoch}/{ep}]')):
+                for idx, (item, gt) in enumerate(tqdm(val_loader, desc=f'[Test Epoch: {ep}/{self.epoch}]')):
                     item = item.to(self.device)
-                    gt = gt.to(self.device)
+                    gt = gt.long().to(self.device)
 
                     logit = model(item)
 
                     loss = loss_fn(logit, gt)
 
-                    pred = logit.cpu().numpy()
-                    gt = gt.cpu().numpy()
-
-                    self.te_disp.update(pred, gt, self.classes, loss)
+                    self.te_disp.update(logit.detach().cpu(), gt.detach().cpu(), self.classes, loss)
 
             if self.log:
-                self.tr_disp.average_score(ep, True, True, db_runner, 'train')
                 self.te_disp.average_score(ep, True, True, db_runner, 'val')
             else:
-                self.tr_disp.average_score(ep, True, True, run_type='train')
                 self.te_disp.average_score(ep, True, False, run_type='val')

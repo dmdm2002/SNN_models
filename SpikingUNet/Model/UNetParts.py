@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 import torch.nn.functional as F
 
 import snntorch as snn
@@ -14,36 +15,30 @@ class DoubleConv(nn.Module):
 
         spike_grad = surrogate.fast_sigmoid(slope=25)
         # global decay rate for all Leaky neurons in Layer 1
-        beta1 = 0.9
+        beta1 = 0.5
         # independent decay rate for each Leaky neuron in Layer 2: [0,1)
         beta2 = torch.rand(out_dims, dtype=torch.float)
 
         self.conv1 = nn.Conv2d(in_dims, mid_dims, kernel_size=3, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(mid_dims)
-        self.lif1 = snn.Leaky(beta=beta1, spike_grad=spike_grad, init_hidden=True)
+        self.lif1 = snn.Leaky(beta=beta1, spike_grad=spike_grad)
         self.conv2 = nn.Conv2d(mid_dims, out_dims, kernel_size=3, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_dims)
-        self.lif2 = snn.Leaky(beta=beta2, spike_grad=spike_grad, init_hidden=True, learn_beta=True)
+        self.lif2 = snn.Leaky(beta=beta1, spike_grad=spike_grad)
 
     def forward(self, x):
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
-        spk2_rec = []
-        mem2_rec = []
 
-        for step in range(25):
-            cur1 = self.conv1(x)
-            cur1 = self.bn1(cur1)
-            spk1, mem1 = self.lif1(cur1, mem1)
+        cur1 = self.conv1(x)
+        cur1 = self.bn1(cur1)
+        spk1, mem1 = self.lif1(cur1, mem1)
 
-            cur2 = self.conv2(x)
-            cur2 = self.bn2(cur2)
-            spk2, mem2 = self.lif2(cur2, mem2)
+        cur2 = self.conv2(spk1)
+        cur2 = self.bn2(cur2)
+        spk2, mem2 = self.lif2(cur2, mem2)
 
-            spk2_rec.append(spk2)
-            mem2_rec.append(mem2)
-
-        return torch.stack(spk2_rec), torch.stack(mem2_rec)
+        return spk2, mem2
 
 
 class Down(nn.Module):
@@ -76,18 +71,10 @@ class Up(nn.Module):
             self.conv = DoubleConv(in_channels, out_channels)
 
     def forward(self, x1, x2):
-        x1, _ = self.up(x1)
-        # input is CHW
-        diffY = x2.size()[2] - x1.size()[2]
-        diffX = x2.size()[3] - x1.size()[3]
-
-        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
-        # if you have padding issues, see
-        # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
-        # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
+        x1 = self.up(x1)
         x = torch.cat([x2, x1], dim=1)
-        return self.conv(x)
+        x, _ = self.conv(x)
+        return x
 
 
 class OutConv(nn.Module):
